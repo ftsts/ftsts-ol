@@ -1,4 +1,28 @@
+"""
+TODO: docstring
+"""
+# pylint: disable=invalid-name
+
 import numpy as np
+
+V_REST = 0  # (mV) resting potential
+V_THRESHOLD = 20  # (mV) threshold potential for action potential
+V_RESET = 14  # (mV) reset potential after action potential
+REFRACTORY = 2  # (ms) refractory period after action potential
+MAX_WEIGHT_IE = 10  # (mV) maximum synaptic weight for E->I connections
+MAX_WEIGHT_EI = 290  # (mV) maximum synaptic weight for I->E connections
+
+
+def _dVdt(v, z, mu, sigma, tau_m, x, stim):
+    """TODO: docstring"""
+    # todo: link to paper/equation
+    # todo: include equation in docstring
+
+    # (eq1&2): τm dV(t)/dt = -V(t) + Z(t) + μ + (σ * sqrt(τm) * X(t)) + Vstim(t)
+
+    return (
+        V_REST - v + z + mu + (sigma * np.sqrt(tau_m) * x) + stim
+    ) / tau_m
 
 
 def ode_neuron_model(
@@ -78,17 +102,9 @@ def ode_neuron_model(
     a_LTP = 1 * plast_on * 1
     eta = 0.25
 
-    # ODE Vectors.
-    dv_Edt = np.zeros((num_steps + 1, N_E))  # membrane potential
-    dv_Idt = np.zeros((num_steps + 1, N_I))  # membrane potential
-    dS_EIdt = np.zeros((num_steps + 1, N_E))  # synaptic conductance
-    dS_IEdt = np.zeros((num_steps + 1, N_I))  # synaptic conductance
-    dX_EIdt = np.zeros((num_steps + 1, N_E))
-    dX_IEdt = np.zeros((num_steps + 1, N_I))
-    dApostdt = np.zeros((num_steps + 1, num_synapses_IE))
-    dApredt = np.zeros((num_steps + 1, num_synapses_IE))
-
-    # State Vectors.
+    # Initialize State Vectors.
+    # todo: can reduce memory with curr, next instead of full arrays
+    # todo: maybe not... np.mean(v_e, axis=1)
     v_E = np.zeros((num_steps + 1, N_E))
     v_I = np.zeros((num_steps + 1, N_I))
     S_EI = np.zeros((num_steps + 1, N_E))
@@ -106,20 +122,16 @@ def ode_neuron_model(
 
     v_E[0, :] = vE0
     v_I[0, :] = vI0
-
     S_EI[0, :] = S_EI0
     S_IE[0, :] = S_IE0
-
     X_EI[0, :] = X_EI0
     X_IE[0, :] = X_IE0
-
     Apost[0, :] = Apost0
     Apre[0, :] = Apre0
-
     W_IE[0, :] = W_IE0
     spt_E[0, :] = spt_E0
 
-    # --- Stimulation Parameters ---
+    # Stimulation Parameters.
     # number of E neurons stimulating
     stim_percent_E = np.zeros(N_E)
     a = 0
@@ -140,168 +152,153 @@ def ode_neuron_model(
     for t in range(num_steps):
         time[t + 1, 0] = time[t, 0] + step_size
 
-        # Update dxdt (excitatory).
-        # τμ dV(t)/dt = -V(t) + Z(t) μ + (σ * sqrt(τm) * X(t)) + Vstim(t)
-        # τd dS(t)/dt = -S(t) + X(t)
-        # τr dX(t)/dt = -X(t) + W(t) * δ(t - tpre + tdelay)
-        if t > delay_index:
-            # FIGURES 3,4,7
-            dv_Edt[t, :] = (
-                vrest
-                - v_E[t, :]  # -V(t)
-                + J_E / C_E * S_EI[t - delay_index, :]  # Z(t)
-                + mew_e  # μ
-                + ON * ue[0, t]  # Vstim(t)
-                + sigma_e * (tau_E_m[0, :] ** 0.5) * whitenoise_E[t, :]
-            ) / tau_E_m[0, :]
-            # FIGURE 6
-            # dv_Edt[i, :] = (vrest - v_E[i, :] + J_E/C_E * S_EI[i-delay_index, :] + mew_e + ON1 * ue[0, i] + ON1 * 10 * np.random.randn(1, N_E) + sigma_e * (tau_E_m[0, :]**0.5) * whitenoise_E[i, :]) / tau_E_m[0, :]
-        else:
-            # FIGURES 3,4,7
-            dv_Edt[t, :] = (
-                vrest
-                - v_E[t, :]
-                + J_E / C_E * leftover_S_EI[t, :]
-                + mew_e
-                + ON * ue[0, t]
-                + sigma_e * (tau_E_m[0, :] ** 0.5) * whitenoise_E[t, :]
-            ) / tau_E_m[0, :]
-            # FIGURE 6
-            # dv_Edt[i, :] = (vrest - v_E[i, :] + J_E/C_E * leftover_S_EI[i, :] + mew_e + ON1 * ue[0, i] + ON1 * 10 * np.random.randn(1, N_E) + sigma_e * (tau_E_m[0, :]**0.5) * whitenoise_E[i, :]) / tau_E_m[0, :]
-        dS_EIdt[t, :] = (-S_EI[t, :] + X_EI[t, :]) / tau_d
-        dX_EIdt[t, :] = -X_EI[t, :] / tau_r  # remaining parts in spike check
+        # Excitatory-Inhibitory Network Model Updates.
+        # Voltage (membrane) potentials.
+        # (eq1&2): τm dV(t)/dt = -V(t) + Z(t) μ + (σ * sqrt(τm) * X(t)) + Vstim(t)
+        # FIGURES 3,4,7
+        dv_Edt = _dVdt(  # equation (1) in paper
+            v=v_E[t, :],
+            z=J_E / C_E * (  # equation (3) in paper
+                S_EI[t - delay_index, :] if t > delay_index
+                else leftover_S_EI[t, :]
+            ),
+            mu=mew_e,
+            sigma=sigma_e,
+            tau_m=tau_E_m[0, :],
+            x=whitenoise_E[t, :],
+            stim=ON * ue[0, t],
+        )
+        dv_Idt = _dVdt(  # equation (2) in paper
+            v=v_I[t, :],
+            z=J_I / C_I * (  # equation (3) in paper
+                S_IE[t-delay_index, :] if t > delay_index
+                else leftover_S_IE[t, :]
+            ),
+            mu=mew_i,
+            sigma=sigma_i,
+            tau_m=tau_I_m[0, :],
+            x=whitenoise_I[t, :],
+            stim=ON * ui[0, t],
+        )
+        # FIGURE 6
+        # dv_Edt[i, :] = (vrest - v_E[i, :] + J_E/C_E * S_EI[i-delay_index, :] + mew_e + ON1 * ue[0, i] + ON1 * 10 * np.random.randn(1, N_E) + sigma_e * (tau_E_m[0, :]**0.5) * whitenoise_E[i, :]) / tau_E_m[0, :]
+        # dv_Edt[i, :] = (vrest - v_E[i, :] + J_E/C_E * leftover_S_EI[i, :] + mew_e + ON1 * ue[0, i] + ON1 * 10 * np.random.randn(1, N_E) + sigma_e * (tau_E_m[0, :]**0.5) * whitenoise_E[i, :]) / tau_E_m[0, :]
+        # dv_Idt[i, :] = (vrest - v_I[i, :] + J_I/C_I * S_IE[i-delay_index, :] + mew_i + ON1 * ui[0, i] + ON1 * 10 * np.random.randn(1, N_I) + sigma_i * (tau_I_m[0, :]**0.5) * whitenoise_I[i, :]) / tau_I_m[0, :]
+        # dv_Idt[i, :] = (vrest - v_I[i, :] + J_I/C_I * leftover_S_IE[i, :] + mew_i + ON1 * ui[0, i] + ON1 * 10 * np.random.randn(1, N_I) + sigma_i * (tau_I_m[0, :]**0.5) * whitenoise_I[i, :]) / tau_I_m[0, :]
+        v_E[t + 1, :] = v_E[t, :] + step_size * dv_Edt
+        v_I[t + 1, :] = v_I[t, :] + step_size * dv_Idt
 
-        # Update x (excitatory).
-        v_E[t+1, :] = v_E[t, :] + step_size * dv_Edt[t, :]
-        S_EI[t+1, :] = S_EI[t, :] + step_size * dS_EIdt[t, :]
-        X_EI[t+1, :] = X_EI[t, :] + step_size * dX_EIdt[t, :]
+        # Conductance Updates.
+        # (eq5): τd dS(t)/dt = -S(t) + X(t)
+        dS_EIdt = (  # equation (5) in paper
+            -S_EI[t, :] + X_EI[t, :]
+        ) / tau_d
+        dS_IEdt = (  # equation (5) in paper
+            -S_IE[t, :] + X_IE[t, :]
+        ) / tau_d
+        S_EI[t + 1, :] = S_EI[t, :] + step_size * dS_EIdt
+        S_IE[t + 1, :] = S_IE[t, :] + step_size * dS_IEdt
 
-        # Calculate Kuramoto Order.
-        spt_E[t+1, :] = spt_E[t, :]
-        # phif update commented out in original code:
+        # (eq6): τr dX(t)/dt = -X(t) + W(t) * δ(t - tpre + tdelay)
+        dX_EIdt = (  # equation (6) in paper
+            -X_EI[t, :]  # + W(t) * δ(t - tpre + tdelay) in spike check
+        ) / tau_r
+        dX_IEdt = (  # equation (6) in paper
+            -X_IE[t, :]  # + W(t) * δ(t - tpre + tdelay) in spike check
+        ) / tau_r
+        X_EI[t + 1, :] = X_EI[t, :] + step_size * dX_EIdt
+        X_IE[t + 1, :] = X_IE[t, :] + step_size * dX_IEdt
+
+        # Spike-Timing Dependence Plasticity (STDP) Updates.
+        # (eq7): W(t + Δt) = W(t) + ΔW(t)
+        # (eq8): ΔW(t) = η * aLTP * Apost(t) if tpre - tpost < 0
+        # (eq9): ΔW(t) = η * aLTD * Apre(t) if tpre - tpost > 0
+        W_IE[t + 1, :] = (  # equation (7) in paper
+            W_IE[t, :]  # + ΔW(t) in spike check
+        )
+
+        # (eq10): τLTP dApost/dt = -Apost + A0 * δ(t - tpost)
+        dApostdt = (
+            -Apost[t, :]  # + A0 * δ(t - tpost) in spike check
+        ) / tau_LTD
+        Apost[t + 1, :] = Apost[t, :] + step_size * dApostdt
+
+        # (eq11): τLTD dApre/dt = -Apre + A0 * δ(t - tpre)
+        dApredt = (
+            -Apre[t, :]  # + A0 * δ(t - tpre) in spike check
+        ) / tau_LTP
+        Apre[t + 1, :] = Apre[t, :] + step_size * dApredt
+
+        # Refractory Updates.
+        ref_E[0, :] -= step_size
+        ref_I[0, :] -= step_size
+
+        # Calculate Kuramoto Order (but not really).
+        spt_E[t + 1, :] = spt_E[t, :]
         # phif[i+1+int(comp_time/step), :] = 2*np.pi * (time[i+1, 0] + comp_time - spt_E[i, :])
 
-        # Update Refractory (excitatory).
-        ref_E[0, :] = ref_E[0, :] - step_size
-
-        # Update dxdt (inhibitory).
-        # τμ dV(t)/dt = -V(t) + Z(t) μ + (σ * sqrt(τm) * X(t)) + Vstim(t)
-        # τd dS(t)/dt = -S(t) + X(t)
-        # τr dX(t)/dt = -X(t) + W(t) * δ(t - tpre + tdelay)
-        if t > delay_index:
-            # TO MAKE FIGURES 3,4,7
-            dv_Idt[t, :] = (
-                vrest
-                - v_I[t, :]
-                + J_I / C_I * S_IE[t-delay_index, :]
-                + mew_i
-                + ON * ui[0, t]
-                + sigma_i * (tau_I_m[0, :] ** 0.5) * whitenoise_I[t, :]
-            ) / tau_I_m[0, :]
-            # TO MAKE FIGURE 6
-            # dv_Idt[i, :] = (vrest - v_I[i, :] + J_I/C_I * S_IE[i-delay_index, :] + mew_i + ON1 * ui[0, i] + ON1 * 10 * np.random.randn(1, N_I) + sigma_i * (tau_I_m[0, :]**0.5) * whitenoise_I[i, :]) / tau_I_m[0, :]
-        else:
-            # TO MAKE FIGURES 3,4,7
-            dv_Idt[t, :] = (
-                vrest
-                - v_I[t, :]
-                + J_I / C_I * leftover_S_IE[t, :]
-                + mew_i
-                + ON * ui[0, t]
-                + sigma_i * (tau_I_m[0, :] ** 0.5) * whitenoise_I[t, :]
-            ) / tau_I_m[0, :]
-            # TO MAKE FIGURE 6
-            # dv_Idt[i, :] = (vrest - v_I[i, :] + J_I/C_I * leftover_S_IE[i, :] + mew_i + ON1 * ui[0, i] + ON1 * 10 * np.random.randn(1, N_I) + sigma_i * (tau_I_m[0, :]**0.5) * whitenoise_I[i, :]) / tau_I_m[0, :]
-        dS_IEdt[t, :] = (-S_IE[t, :] + X_IE[t, :]) / tau_d
-        dX_IEdt[t, :] = -X_IE[t, :] / tau_r  # remaining parts in spike check
-
-        # Update x (inhibitory).
-        v_I[t+1, :] = v_I[t, :] + step_size * dv_Idt[t, :]
-        S_IE[t+1, :] = S_IE[t, :] + step_size * dS_IEdt[t, :]
-        X_IE[t+1, :] = X_IE[t, :] + step_size * dX_IEdt[t, :]
-
-        # Update Refractory (inhibitory).
-        ref_I[0, :] = ref_I[0, :] - step_size
-
-        # -- Update Synaptic Variables (STDP?).
-        # Update dxdt.
-        # τLTP dApost/dt = -Apost + A0 * δ(t - tpost)
-        # τLTD dApre/dt = -Apre + A0 * δ(t - tpre)
-        dApostdt[t, :] = -Apost[t, :] / tau_LTD
-        dApredt[t, :] = -Apre[t, :] / tau_LTP
-
-        # Update x.
-        Apost[t+1, :] = Apost[t, :] + step_size * dApostdt[t, :]
-        Apre[t+1, :] = Apre[t, :] + step_size * dApredt[t, :]
-        W_IE[t+1, :] = W_IE[t, :]
-
-        # Check for Action Potentials (excitatory).
-        for k in range(N_E):
-            if v_E[t+1, k] >= 20 and v_E[t, k] < 20:
-                # reset & refractory
-                v_E[t+1, k] = vreset
-                ref_E[0, k] = refractory
-
-                # spike monitor
-                spike_E[t+1, k] = k + 1  # preserving MATLAB 1-index output
-                spt_E[t+1, k] = time[t+1, 0] + comp_time
+        # Check for Spikes.
+        for k in range(N_E):  # excitatory
+            if v_E[t, k] < V_THRESHOLD <= v_E[t+1, k]:
+                v_E[t + 1, k] = V_RESET
+                ref_E[0, k] = REFRACTORY
+                spike_E[t + 1, k] = k + 1
+                spt_E[t + 1, k] = time[t + 1, 0] + comp_time
                 # spt_E[0, k] = time[i+1, 0] + comp_time  # converter
 
-                # check synaptic connection E to I
-                for j in range(N_I):
+                for j in range(N_I):  # E to I
                     if S_key_IE[k, j] != 0:
                         index = int(S_key_IE[k, j]) - 1
-                        # synaptic input from E to I : _(IE)
-                        X_IE[t+1, j] = X_IE[t, j] + W_IE[t, index]
-
+                        X_IE[t + 1, j] = (  # + W(t) * δ(t - tpre + tdelay)
+                            X_IE[t, j] + W_IE[t, index]
+                        )
                         # plasticity update - "on_pre"
-                        Apre[t+1, index] = Apre[t, index] + dApre_0
-                        W_IE[t+1, index] = W_IE[t, index] + \
-                            eta * a_LTD * Apost[t, index]
-
+                        Apre[t + 1, index] = (  # + A0 * δ(t - tpre)
+                            Apre[t, index] + dApre_0
+                        )
+                        W_IE[t + 1, index] = (  # equation (9) in paper
+                            W_IE[t, index]
+                            + eta * a_LTD * Apost[t, index]
+                        )
                         # max synaptic weight check
-                        if (J_I * W_IE[t+1, index]) < 10:
-                            W_IE[t+1, index] = 10 / J_I
-            elif ref_E[0, k] >= 0:
-                # check if in refractory period
-                v_E[t+1, k] = vreset
-            elif v_E[t+1, k] < vrest:
-                v_E[t+1, k] = vrest
+                        if (J_I * W_IE[t + 1, index]) < MAX_WEIGHT_IE:
+                            W_IE[t + 1, index] = MAX_WEIGHT_IE / J_I
+            elif ref_E[0, k] >= 0:  # in refractory period
+                v_E[t + 1, k] = V_RESET
+            elif v_E[t + 1, k] < V_REST:
+                v_E[t + 1, k] = V_REST
 
         # Check for Action Potentials (inhibitory).
         for k in range(N_I):
-            if v_I[t+1, k] >= 20 and v_I[t, k] < 20:
-                # reset & refractory
-                v_I[t+1, k] = vreset
-                ref_I[0, k] = refractory
+            if v_I[t, k] < V_THRESHOLD <= v_I[t + 1, k]:
+                v_I[t + 1, k] = V_RESET
+                ref_I[0, k] = REFRACTORY
+                spike_I[t + 1, k] = k + 1 + N_E
+                spike_I_time[t + 1, k] = time[t + 1, 0]
 
-                # spike monitor
-                spike_I[t+1, k] = k + 1 + N_E
-                spike_I_time[t+1, k] = time[t+1, 0]
-
-                # check synaptic connection I to E
-                for j in range(N_E):
-                    # synaptic input from I to E : _(EI)
+                for j in range(N_E):  # I to E
                     if S_key_EI[k, j] != 0:
                         index = int(S_key_EI[k, j]) - 1
                         X_EI[t+1, j] = X_EI[t, j] - WEI
                     # plasticity update - "on_post"
                     if S_key_IE[j, k] != 0:
                         index = int(S_key_IE[j, k]) - 1
-                        Apost[t+1, index] = Apost[t, index] + dApost_0
-                        W_IE[t+1, index] = W_IE[t, index] + \
-                            eta * a_LTP * Apre[t, index]
+                        Apost[t + 1, index] = Apost[t, index] + dApost_0
+                        W_IE[t + 1, index] = (  # equation (8) in paper
+                            W_IE[t, index]
+                            + eta * a_LTP * Apre[t, index]
+                        )
 
                         # max synaptic weight check
-                        if (J_I * W_IE[t+1, index]) > 290:
-                            W_IE[t+1, index] = 290 / J_I
-            elif ref_I[0, k] >= 0:
-                # check if in refractory period
-                v_I[t+1, k] = vreset
-            elif v_I[t+1, k] < vrest:
-                v_I[t+1, k] = vrest
+                        if (J_I * W_IE[t + 1, index]) > MAX_WEIGHT_EI:
+                            W_IE[t + 1, index] = MAX_WEIGHT_EI / J_I
+            elif ref_I[0, k] >= 0:  # in refractory period
+                v_I[t + 1, k] = V_RESET
+            elif v_I[t + 1, k] < V_REST:
+                v_I[t + 1, k] = V_REST
 
     # Calculate Synchrony.
+    # todo: what synchrony measurement is this?
     # synchrony = sqrt(Var[V(t)] / Var[Vi(t)])
     N = N_E  # + N_I;
     Vcomb = np.zeros((num_steps + 1, N))
