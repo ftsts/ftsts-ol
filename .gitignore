@@ -1,0 +1,9 @@
+# malware
+venv/
+__pycache__/
+.vscode/
+
+data/*
+!data/README.md
+
+libkuramoto.so
