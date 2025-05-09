@@ -15,12 +15,9 @@ An aysynchronous network has R(t) = 0.
 
 High level of synchrony at high synaptic weights.
 Low level of synchrony at low synaptic weights.
-
-Expecting...
-    s
-    R(t) = ~0.75 first 2s, then ~0.05.
 """
 
+import os
 import math
 import ctypes
 import numpy as np
@@ -83,8 +80,21 @@ def kop_py(sptime, t, step_size, duration, num_neurons):
 def kop_c(sptime, t, step_size, duration, num_neurons):
     """Calls C implementaion."""
 
+    path = "./libkuramoto.so"  # path to compiled c function
+
+    if not os.path.exists(path):
+        print(
+            "\n==========\n"
+            "WARNING:\n"
+            f"Failed to find compiled C function in {path}.\n"
+            "You may have forgotten to compile the C code for Kuramoto Synchrony.\n"
+            "Using Python implementation instead."
+            "\n==========\n"
+        )
+        return kop_py(sptime, t, step_size, duration, num_neurons)
+
     # Load shared library.
-    lib = ctypes.CDLL("./libkuramoto.so")
+    lib = ctypes.CDLL(path)
 
     # Define the function signature.
     lib.kuramoto_syn.argtypes = [
