@@ -3,8 +3,6 @@ Simulation of Deep Brain Stimulation (DBS).
 
 Uses the Forced Temporal Spike-Time Stimulation (FTSTS) DBS strategy.
 """
-# pylint: disable=invalid-name
-
 
 import numpy as np
 from dbssim import run_simulation
@@ -20,7 +18,7 @@ def main():
         N_E=160,
         N_I=40,
         seed=42,
-        cache=True,
+        cache=False,
     )
 
     sptime, step_size, duration, ne, J_I, W_IE, synchrony = data
