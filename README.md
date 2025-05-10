@@ -11,7 +11,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # (opetional) Compile kop.c if using C implementation of kuramoto_syn.
-gcc -shared -o libkuramoto.so -fPIC kop.c -lm
+gcc -shared -o libkuramoto.so -fPIC src/kop.c -lm
 
 # Run the example simulation configuration.
 python src/main.py
