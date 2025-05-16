@@ -108,6 +108,8 @@ class NeuralModel:
         self.phif = np.zeros((1, self.num_e))
         self.synchrony = np.zeros((int(self.num_samples), 1))
         self.time_syn = np.zeros((int(self.num_samples), 1))
+        self.spike_e = np.zeros((self.num_steps, self.num_e))
+        self.spike_i = np.zeros((self.num_steps, self.num_i))
         self.spike_time_e = np.zeros((self.num_steps, self.num_e))
         self.sp_e_count = np.zeros((
             int(self.num_steps_per_sample),
@@ -315,10 +317,15 @@ class NeuralModel:
             # Check for Spikes.
             for e in range(self.num_e):  # excitatory
                 if v_e[t, e] < V_THRESHOLD <= v_e[t + 1, e]:
-                    v_e[t + 1, e] = V_RESET
-                    self.ref_e[0, e] = REFRACTORY
+                    # Record Spike.
                     spike_e[t + 1, e] = e + 1
                     spt_e[t + 1, e] = step_times[t + 1] + self.comp_time
+
+                    # Reset Neuron's Potential and and Refractory Period.
+                    v_e[t + 1, e] = V_RESET
+                    self.ref_e[0, e] = REFRACTORY
+
+                    # Update Postsynaptic Connections.
                     for i in range(self.num_i):  # E to I
                         if self.s_key_ie[e, i] != 0:
                             syn_idx = int(self.s_key_ie[e, i]) - 1
@@ -343,11 +350,15 @@ class NeuralModel:
 
             for i in range(self.num_i):  # inhibitory
                 if v_i[t, i] < V_THRESHOLD <= v_i[t + 1, i]:
-                    v_i[t + 1, i] = V_RESET
-                    self.ref_i[0, i] = REFRACTORY
+                    # Record Spike.
                     spike_i[t + 1, i] = i + 1 + self.num_e
                     spike_I_time[t + 1, i] = step_times[t + 1]
 
+                    # Reset Neuron's Potential and and Refractory Period.
+                    v_i[t + 1, i] = V_RESET
+                    self.ref_i[0, i] = REFRACTORY
+
+                    # Update Postsynaptic Connections.
                     for e in range(self.num_e):  # I to E
                         if self.s_key_ei[i, e] != 0:
                             syn_idx = int(self.s_key_ei[i, e]) - 1

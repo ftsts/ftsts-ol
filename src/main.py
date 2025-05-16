@@ -9,7 +9,12 @@ from config import SimulationConfig
 from dbssim import run_simulation
 from neural_model import NeuralModel
 from kuramoto_syn import kuramoto_syn
-from plotting import plot_kop, plot_avg_synaptic_weight, plot_synchrony
+from plotting import (
+    plot_kop,
+    plot_synchrony,
+    plot_spike_patterns,
+    plot_avg_synaptic_weight,
+)
 
 
 def main():
@@ -27,7 +32,7 @@ def main():
     neural_model = NeuralModel(
         shared_params=simconfig,
         num_e=160,
-        num_i=50,
+        num_i=40,
         seed=42,
     )
 
@@ -37,13 +42,9 @@ def main():
         cache=False,
     )
 
-    sptime, step_size, duration, ne, J_I, W_IE, synchrony = data
+    sptime, step_size, duration, ne, J_I, W_IE, synchrony, spike_e, spike_i = data
 
-    t = np.linspace(
-        0.1,
-        duration,
-        int(round((duration - 0.1) / step_size)) + 1
-    )
+    t = np.arange(0.1, duration + step_size, step_size)
     t = np.ascontiguousarray(t, dtype=np.float64)
 
     # Compute Neuron Synchronization.
@@ -57,8 +58,9 @@ def main():
     )
 
     plot_kop(t, re)
-    plot_avg_synaptic_weight(t, J_I, W_IE, duration)
     plot_synchrony(synchrony)
+    plot_spike_patterns(spike_e, spike_i, step_size)
+    plot_avg_synaptic_weight(t, J_I, W_IE, duration)
 
 
 if __name__ == "__main__":

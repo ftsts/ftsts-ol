@@ -118,8 +118,9 @@ def run_simulation(
             w_ie[0:-1, :],
             axis=1
         )
-        # model.spike_e[sample_start:sample_end, :] = spike_e_m[0:num_steps_per_sample, :]
-        # model.spike_i[sample_start:sample_end, :] = spike_i_m[0:num_steps_per_sample, :]
+
+        model.spike_e[sample_start:sample_end, :] = spike_e[0:num_steps_per_sample, :]
+        model.spike_i[sample_start:sample_end, :] = spike_i[0:num_steps_per_sample, :]
         model.synchrony[i - 1, 0] = synchrony
         model.time_syn[i - 1, 0] = sample_duration * (i)
         model.spike_time_e[sample_start:sample_end, :] = spt_e[0:-1, :]
@@ -160,4 +161,6 @@ def run_simulation(
         model.j_i,
         model.w_ie,
         model.synchrony,
+        model.spike_e,
+        model.spike_i,
     )

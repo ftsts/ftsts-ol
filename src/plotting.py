@@ -73,51 +73,61 @@ def plot_synchrony(syn):
     plt.tight_layout()
     plt.show()
 
-# def plot_spike_patterns(spike_e, spike_i, step_size):
-#     spike_e_T = spike_e.T
-#     neuron_indices, time_indices = np.where(spike_e_T != 0)
-#     spike_times = spike_e_T[neuron_indices, time_indices]
-#     plt.figure(figsize=(10, 6))
-#     plt.scatter(spike_times[1_000_000:1_001_000], neuron_indices[1_000_000:1_001_000], s=2)
 
-#     # plt.figure(figsize=(12, 8))
-#     # tb = np.arange(200, 600, step_size)
-#     # tm = np.arange(5000, 5400, step_size)
-#     # te = np.arange(38000, 38400, step_size)
-#     # plt.figure(3)
-#     # # E ?
-#     # print("E")
-#     # plt.subplot(3,1,1)
-#     # a = int(200/step_size)
-#     # b = int(600/step_size)
-#     # plt.plot(tb/1000, spike_e[a:b, :], 'k.', tb/1000, spike_i[a:b, :], 'r.')
-#     # plt.xlim([200/1000, 600/1000])
-#     # plt.ylim([0.9, 2000.1])
-#     # plt.ylabel('Neuron Index')
-#     # plt.xlabel('Time (sec)')
+def plot_spike_patterns(spike_e, spike_i, step_size):
+    """
+    Plot the spiking patterns before, during, and after the FTSTS protocol,
+    respectively.
+    """
 
-#     # # F ?
-#     # print("F")
-#     # c = int(5000/step_size)
-#     # d = int(5400/step_size)
-#     # plt.subplot(3,1,2)
-#     # plt.plot(tm/1000, spike_e[c:d, :], 'k.', tm/1000, spike_i[c:d, :], 'r.')
-#     # plt.xlim([5000/1000, 5400/1000])
-#     # plt.ylim([0.9, 2000.1])
-#     # plt.ylabel('Neuron Index')
-#     # plt.xlabel('Time (sec)')
+    # time_windows = [  # todo: change with simulation params
+    #     (200, 600),
+    #     (5000, 5400),
+    #     (24000, 24400),
+    # ]
+    time_windows = [
+        (0, 350),
+        (400, 750),
+        (4650, 5000),
+    ]
 
-#     # G ?
-#     # print("G")
-#     # e = int(38000/step_size)
-#     # f = int(38400/step_size)
-#     # plt.subplot(3,1,3)
-#     # plt.plot(te/1000, spike_e[e:f, :], 'k.', te/1000, spike_i[e:f, :], 'r.')
-#     # plt.xlim([38000/1000, 38400/1000])
-#     # plt.ylim([0.9, 2000.1])
-#     # plt.ylabel('Neuron Index')
-#     # plt.xlabel('Time (sec)')
-#     plt.show()
+    num_e = spike_e.shape[1]
+    num_i = spike_i.shape[1]
+
+    fig, axs = plt.subplots(
+        len(time_windows),
+        1,
+        figsize=(12, 4 * len(time_windows)),
+        sharey=True,
+    )
+
+    if len(time_windows) == 1:
+        acs = [axs]  # ensure iterable
+
+    for ax, (start_ms, end_ms) in zip(axs, time_windows):
+        a = int(start_ms / step_size)
+        b = int(end_ms / step_size)
+
+        time_range = np.arange(a, b) * step_size / 1000  # (s)
+        spikes_e = spike_e[a:b, :]
+        spikes_i = spike_i[a:b, :]
+        te, ne = np.nonzero(spikes_e)
+        ti, ni = np.nonzero(spikes_i)
+
+        te_time = (a + te) * step_size / 1000
+        ti_time = (a + ti) * step_size / 1000
+
+        ax.plot(te_time, ne + 1, 'k.', markersize=1)
+        ax.plot(ti_time, num_e + ni + 1, 'r.', markersize=1)
+
+        ax.set_xlim(start_ms / 1000, end_ms / 1000)
+        ax.set_ylim(0.9, num_e + num_i + 0.1)
+        ax.set_ylabel('Neuron Index')
+        ax.set_xlabel('Time (s)')
+        ax.set_title(f'Spike Raster Plot: {start_ms}–{end_ms} ms')
+
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_avg_synaptic_input(S_EI, S_IE, duration, step_size):
