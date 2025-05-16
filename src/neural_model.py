@@ -189,11 +189,11 @@ class NeuralModel:
         apost = np.zeros((num_steps + 1, self.num_synapses_ie))
         apre = np.zeros((num_steps + 1, self.num_synapses_ie))
         w_ie = np.zeros((num_steps + 1, self.num_synapses_ie))
-        step_times = np.zeros((num_steps + 1, 1))
         spike_e = np.zeros((num_steps + 1, self.num_e))
         spike_i = np.zeros((num_steps + 1, self.num_i))
         # spt_E = np.zeros((1, self.num_e))
         spt_e = np.zeros((num_steps + 1, self.num_e))
+        step_times = np.zeros((num_steps + 1,))
 
         v_e[0, :] = self.v_e0
         v_i[0, :] = self.v_i0
@@ -225,7 +225,7 @@ class NeuralModel:
         delay_index = int(syn_delay / self.step_size) - 1
 
         for t in range(num_steps):
-            step_times[t + 1, 0] = step_times[t, 0] + self.step_size
+            step_times[t + 1] = step_times[t] + self.step_size
 
             # Excitatory-Inhibitory Network Model Updates.
             # Voltage (membrane) potentials.
@@ -318,7 +318,7 @@ class NeuralModel:
                     v_e[t + 1, k] = V_RESET
                     self.ref_e[0, k] = REFRACTORY
                     spike_e[t + 1, k] = k + 1
-                    spt_e[t + 1, k] = step_times[t + 1, 0] + self.comp_time
+                    spt_e[t + 1, k] = step_times[t + 1] + self.comp_time
                     for j in range(self.num_i):  # E to I
                         if self.s_key_ie[k, j] != 0:
                             syn_idx = int(self.s_key_ie[k, j]) - 1
@@ -346,7 +346,7 @@ class NeuralModel:
                     v_i[t + 1, k] = V_RESET
                     self.ref_i[0, k] = REFRACTORY
                     spike_i[t + 1, k] = k + 1 + self.num_e
-                    spike_I_time[t + 1, k] = step_times[t + 1, 0]
+                    spike_I_time[t + 1, k] = step_times[t + 1]
 
                     for j in range(self.num_e):  # I to E
                         if self.s_key_ei[k, j] != 0:
@@ -394,7 +394,7 @@ class NeuralModel:
         syn_squ = sigma_squ_v / (sum_sig / N)
         synchrony = float(np.sqrt(syn_squ))
 
-        assert step_times.shape == (num_steps + 1, 1)
+        assert step_times.shape == (num_steps + 1,)
         assert v_e.shape == (num_steps + 1, self.num_e)
         assert v_i.shape == (num_steps + 1, self.num_i)
         assert s_ei.shape == (num_steps + 1, self.num_e)

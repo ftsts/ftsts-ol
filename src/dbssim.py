@@ -112,7 +112,7 @@ def run_simulation(
 
         # Recorded Variables.
         model.time_array[sample_start:sample_end, 0] = (
-            step_times[0:-1, 0] + (i - 1) * sample_duration
+            step_times[0:-1] + (i - 1) * sample_duration
         )
         model.w_ie[sample_start:sample_end, 0] = np.mean(
             w_ie[0:-1, :],
